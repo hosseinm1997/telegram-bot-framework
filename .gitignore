@@ -1,4 +1,6 @@
 env.php
+src/models/*
+src/sqldumps/*
 src/users/*
 !src/users/Root.php
 .idea
