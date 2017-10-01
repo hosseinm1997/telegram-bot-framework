@@ -1,0 +1,4 @@
+env.php
+src/users/*
+!src/users/Root.php
+project.log
