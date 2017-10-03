@@ -10,12 +10,13 @@ class DB
     private function __clone(){}
 
     private static $connection=null;
+
     /**
      * @return null|\PDO
      */
     public static function getInstance()
     {
-        if(is_null(static::$connection))
+        if(is_null(self::$connection))
         {
             $host = env('host');
             $db_name = env('database_name');
@@ -39,8 +40,8 @@ class DB
 
     public static function migrateAllSql()
     {
-        $result = self::migrateBuiltinSql();
-        $result .= "\n" . self::migrateUserSql();
+//        $result = self::migrateBuiltinSql();
+        $result = "\n" . self::migrateUserSql();
         return $result;
     }
 

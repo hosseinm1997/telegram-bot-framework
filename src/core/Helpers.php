@@ -41,9 +41,14 @@ function dd(...$vars)
     $text = '';
     foreach ($vars as $var)
     {
-        $text .= $var . "\n";
+        if(!is_string($var))
+            $text .= trim(var_export($var,true),"'") . "\n";
+        else
+            $text .= $var . "\n";
+
     }
-    $message = new Text(var_export($text,true),new Root(''));
+
+    $message = new Text($text,new Root(''));
     $message->sendTo();
     exit();
 }

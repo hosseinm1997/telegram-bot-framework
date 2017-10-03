@@ -1,6 +1,9 @@
 env.php
 src/models/*
-src/sqldumps/*
+!src/models/Keyboard.php
+!src/models/Post.php
+#src/sqldumps/*
 src/users/*
 !src/users/Root.php
 .idea
+tester.php
