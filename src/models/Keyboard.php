@@ -9,8 +9,8 @@ class Keyboard extends BaseModel
 {
     protected static $table = 'keyboards';
 
-    public static function T()
+    public function posts()
     {
-        return self::$table;
+        return $this->hasMany('keyboardposts','keyboards.id','keyboardposts.keyboard_id','INNER')->hasMany('posts','post_id','posts.id','INNER');
     }
 }

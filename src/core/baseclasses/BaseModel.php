@@ -34,6 +34,7 @@ class BaseModel extends DB implements IModel
         $method_map = [
             'where' => 'dynamicWhere'
         ];
+
         if(array_key_exists($name,$method_map))
             return call_user_func([$this,$method_map[$name]],$arguments);
 
@@ -64,26 +65,84 @@ class BaseModel extends DB implements IModel
             foreach ($column as $condition)
             {
                 if(count($condition)==2)
-                    static::$where .= (empty(static::$where)?'':' and (') . "`$condition[0]`" . self::sanitizeSql($condition[1])  . ')';
+                    static::$where .= (empty(static::$where)?'':' and (') . "`$condition[0]`" . self::sanitizeValues($condition[1])  . ')';
                 else if(count($condition)==3)
-                    static::$where .= (empty(static::$where)?'':' and (') . "`$condition[0]`" . $condition[1] . self::sanitizeSql($condition[2]) . ')';
+                    static::$where .= (empty(static::$where)?'':' and (') . "`$condition[0]`" . $condition[1] . self::sanitizeValues($condition[2]) . ')';
             }
             return new static();
         }
         if(count(func_get_args()==2))
         {
-            static::$where .= (empty(static::$where)?'':static::$glueWhere) . "(`$column`" . '=' . self::sanitizeSql($operator) . ')';
+            static::$where .= (empty(static::$where)?'':static::$glueWhere) . "(`$column`" . '=' . self::sanitizeValues($operator) . ')';
         }
         else
         {
-            static::$where .= (empty(static::$where)?'':static::$glueWhere) . "(`$column`" . $operator . self::sanitizeSql($value) . ')';
+            static::$where .= (empty(static::$where)?'':static::$glueWhere) . "(`$column`" . $operator . self::sanitizeValues($value) . ')';
             static::$glueWhere = $boolean;
         }
     }
 
-    private static function sanitizeSql($text)
+    private static function sanitizeValues($input)
     {
-        return (is_string($text)? str_replace("\\","\\\\", "'$text'"):$text);
+
+        return (is_string($input)? str_replace("\\","\\\\", "'$input'"):$input);
+
+    }
+
+    private static function sanitizeFields($input)
+    {
+        if(strpos($input,'.'))
+        {
+            $parts = explode('.',$input);
+            $input = static::sanitizeFields($parts[0]) . '.' . static::sanitizeFields($parts[1]);
+            return $input;
+        }
+        return "`$input`";
+    }
+
+    private static function bind($statement,$bindings)
+    {
+        $possible_types = [
+            "boolean" => PDO::PARAM_BOOL,
+            "integer" => PDO::PARAM_INT,
+            "double" => PDO::PARAM_INT,
+            "string" => PDO::PARAM_STR,
+            "NULL" => PDO::PARAM_NULL,
+            "array" => PDO::PARAM_STR,
+            "object" => PDO::PARAM_STR,
+            "resource" => PDO::PARAM_STR,
+            "unknown type" => PDO::PARAM_STR,
+        ];
+
+        foreach ($bindings as $param => $value)
+        {
+            $statement->bindValue($param,$value,$possible_types[gettype($value)]);
+        }
+        return $statement;
+    }
+
+    /**
+     * @param $column
+     * @param string $operator
+     * @param mixed $value
+     * @param string $boolean
+     * @return static
+     */
+    protected function dynamicWhere($column, $operator = '=', $value = null, $boolean = ' and ')
+    {
+        self::prepareWhere($column,$operator,$value,$boolean);
+        return $this;
+    }
+
+    protected function hasMany($table,$primary_key,$foreign_key,$join='LEFT')
+    {
+        $destination_table = self::sanitizeFields($table);
+
+        $primary_key = /*$source_table . '.' . */self::sanitizeFields($primary_key);
+        $foreign_key = /*$destination_table . '.' .*/ self::sanitizeFields($foreign_key);
+        static::$join .= " $join JOIN $destination_table ON $primary_key=$foreign_key";
+
+        return $this;
     }
 
     /**
@@ -91,13 +150,15 @@ class BaseModel extends DB implements IModel
      * @return $this
      * @throws Exception
      */
-    public static function all($columns = ['*'])
+    public static function all()
     {
         return new static();
     }
 
+
     /**
-     * @param array|int $id
+     * @param $ids
+     * @return static
      */
     public static function find($ids)
     {
@@ -116,19 +177,6 @@ class BaseModel extends DB implements IModel
      * @param string $boolean
      * @return static
      */
-    protected function dynamicWhere($column, $operator = '=', $value = null, $boolean = ' and ')
-    {
-        self::prepareWhere($column,$operator,$value,$boolean);
-        return $this;
-    }
-
-    /**
-     * @param $column
-     * @param string $operator
-     * @param mixed $value
-     * @param string $boolean
-     * @return static
-     */
     public static function where($column, $operator = '=', $value = null, $boolean = ' and ')
     {
         self::prepareWhere($column,$operator,$value,$boolean);
@@ -138,28 +186,13 @@ class BaseModel extends DB implements IModel
 
     public static function raw($sql,$bindings = [])
     {
-        $possible_types = [
-            "boolean" => PDO::PARAM_BOOL,
-            "integer" => PDO::PARAM_INT,
-            "double" => PDO::PARAM_INT,
-            "string" => PDO::PARAM_STR,
-            "NULL" => PDO::PARAM_NULL,
-            "array" => PDO::PARAM_STR,
-            "object" => PDO::PARAM_STR,
-            "resource" => PDO::PARAM_STR,
-            "unknown type" => PDO::PARAM_STR,
-        ];
-
         try
         {
-            $builder = self::$connection->prepare($sql);
-            foreach ($bindings as $param => $value)
-            {
-                $builder->bindValue($param,$value,$possible_types[gettype($value)]);
-            }
+            $statement = self::$connection->prepare($sql);
+            $statement = self::bind($statement,$bindings);
 //            dd(static::$query);
-            $builder->execute();
-            return $builder->fetchAll(PDO::FETCH_ASSOC);
+            $statement->execute();
+            return $statement->fetchAll(PDO::FETCH_ASSOC);
         }
         catch(PDOException $pdo_exception)
         {
@@ -175,8 +208,7 @@ class BaseModel extends DB implements IModel
 
         for($i=0;$i<count($orders);$i+=2)
         {
-
-            static::$order .= "`$orders[$i]`" . ' ' . $orders[$i+1] . ',';
+            static::$order .= static::sanitizeFields($orders[$i]) . ' ' . $orders[$i+1] . ',';
         }
         static::$order = rtrim(static::$order,',');
         return $this;
@@ -190,9 +222,8 @@ class BaseModel extends DB implements IModel
             static::$query =
                 'SELECT ' .
                 $column_clause .
-                ' FROM `' .
-                static::$table .
-                '`' .
+                ' FROM ' .
+                static::sanitizeFields(static::$table) .
                 static::$join .
                 (empty(static::$where)?'':'` WHERE ' . static::$where) .
                 static::$order .
@@ -210,9 +241,43 @@ class BaseModel extends DB implements IModel
 
     }
 
-    public function hasMany(IModel $model,$primary_key = 'id',$foreign_key = '_id')
+    public static function create($attributes)
     {
+        self::$connection = parent::getInstance();
+        try
+        {
 
-//        static::$join = ' LEFT JOIN ' . $table .
+            $insert_clause = 'INSERT INTO ' . self::sanitizeFields(static::$table) . ' ';
+            $column_clause = '(';
+            $values_clause ='(';
+            $first = true;
+            foreach ($attributes as $key => $value)
+            {
+                if(!$first)
+                {
+                    $column_clause .= ',';
+                    $values_clause .= ',';
+                }
+                else
+                    $first = false;
+
+                $column_clause .= self::sanitizeFields($key);
+                $values_clause .= ':' . $key;
+            }
+            $column_clause .= ')';
+            $values_clause .= ')';
+
+            $insert_clause .= $column_clause . ' VALUES ' . $values_clause;
+
+            $statement = self::$connection->prepare($insert_clause);
+            $statement = self::bind($statement,$attributes);
+//            dd($insert_clause);
+            $statement->execute();
+            return $statement->fetchAll(PDO::FETCH_ASSOC);
+        }
+        catch(PDOException $pdo_exception)
+        {
+            throw new Exception($pdo_exception->getMessage() . "\n" . "SQL : " . static::$query);
+        }
     }
 }

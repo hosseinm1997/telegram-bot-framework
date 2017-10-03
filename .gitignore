@@ -1,4 +1,5 @@
 env.php
+project.log
 src/models/*
 !src/models/Keyboard.php
 !src/models/Post.php
