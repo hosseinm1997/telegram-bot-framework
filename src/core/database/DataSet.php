@@ -1,10 +1,4 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Hossein
- * Date: 2017/10/03
- * Time: 8:04 PM
- */
 
 namespace Robot\Core\Database;
 
