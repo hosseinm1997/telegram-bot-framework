@@ -6,6 +6,7 @@ use Exception;
 use PDO;
 use PDOException;
 use Robot\Core\Contracts\IModel;
+use Robot\Core\Database\DataRow;
 use Robot\Core\Database\DB;
 
 /**
@@ -13,7 +14,7 @@ use Robot\Core\Database\DB;
  *
  */
 
-class BaseModel extends DB implements IModel
+class BaseModel implements IModel
 {
     private static $connection;
     protected static $table;
@@ -25,7 +26,7 @@ class BaseModel extends DB implements IModel
 
     function __construct(...$args)
     {
-        self::$connection = parent::getInstance();
+        self::$connection = DB::initialize();
 
     }
 
@@ -100,26 +101,6 @@ class BaseModel extends DB implements IModel
         return "`$input`";
     }
 
-    private static function bind($statement,$bindings)
-    {
-        $possible_types = [
-            "boolean" => PDO::PARAM_BOOL,
-            "integer" => PDO::PARAM_INT,
-            "double" => PDO::PARAM_INT,
-            "string" => PDO::PARAM_STR,
-            "NULL" => PDO::PARAM_NULL,
-            "array" => PDO::PARAM_STR,
-            "object" => PDO::PARAM_STR,
-            "resource" => PDO::PARAM_STR,
-            "unknown type" => PDO::PARAM_STR,
-        ];
-
-        foreach ($bindings as $param => $value)
-        {
-            $statement->bindValue($param,$value,$possible_types[gettype($value)]);
-        }
-        return $statement;
-    }
 
     /**
      * @param $column
@@ -186,18 +167,7 @@ class BaseModel extends DB implements IModel
 
     public static function raw($sql,$bindings = [])
     {
-        try
-        {
-            $statement = self::$connection->prepare($sql);
-            $statement = self::bind($statement,$bindings);
-//            dd(static::$query);
-            $statement->execute();
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
-        }
-        catch(PDOException $pdo_exception)
-        {
-            throw new Exception($pdo_exception->getMessage() . "\n" . "SQL : " . static::$query);
-        }
+        DB::raw($sql);
     }
 
     public function orderBy($orders = ['id','ASC'])
@@ -216,68 +186,33 @@ class BaseModel extends DB implements IModel
 
     public function get($columns = ['*'])
     {
-        try
-        {
-            $column_clause = $columns[0] == '*' ? '*' : implode(' , ', $columns);
-            static::$query =
-                'SELECT ' .
-                $column_clause .
-                ' FROM ' .
-                static::sanitizeFields(static::$table) .
-                static::$join .
-                (empty(static::$where)?'':'` WHERE ' . static::$where) .
-                static::$order .
-                ';';
+        return DB::select(static::$table,$columns,static::$where,static::$join,static::$order);
+    }
 
-            $builder = self::$connection->prepare(self::$query);
-//            dd(static::$query);
-            $builder->execute();
-            return $builder->fetchAll(PDO::FETCH_ASSOC);
-        }
-        catch(PDOException $pdo_exception)
-        {
-            throw new Exception($pdo_exception->getMessage() . "\n" . "SQL : " . static::$query);
-        }
-
+    public function getTableName()
+    {
+        return static::$table;
     }
 
     public static function create($attributes)
     {
-        self::$connection = parent::getInstance();
-        try
+        $id = DB::insert(static::$table,$attributes);
+        return new DataRow(new static(),$id);
+    }
+
+    /**
+     * @param $attributes
+     * @return array of DataRow
+     * @throws \Robot\Core\Database\Exception
+     */
+    public static function update($attributes)
+    {
+        $updated_ids = DB::update(static::$table,$attributes,static::$where);;
+        $result = [];
+        foreach ($updated_ids as $id)
         {
-
-            $insert_clause = 'INSERT INTO ' . self::sanitizeFields(static::$table) . ' ';
-            $column_clause = '(';
-            $values_clause ='(';
-            $first = true;
-            foreach ($attributes as $key => $value)
-            {
-                if(!$first)
-                {
-                    $column_clause .= ',';
-                    $values_clause .= ',';
-                }
-                else
-                    $first = false;
-
-                $column_clause .= self::sanitizeFields($key);
-                $values_clause .= ':' . $key;
-            }
-            $column_clause .= ')';
-            $values_clause .= ')';
-
-            $insert_clause .= $column_clause . ' VALUES ' . $values_clause;
-
-            $statement = self::$connection->prepare($insert_clause);
-            $statement = self::bind($statement,$attributes);
-//            dd($insert_clause);
-            $statement->execute();
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
+            $result[] = new DataRow(new static(),$id);
         }
-        catch(PDOException $pdo_exception)
-        {
-            throw new Exception($pdo_exception->getMessage() . "\n" . "SQL : " . static::$query);
-        }
+        return $result;
     }
 }

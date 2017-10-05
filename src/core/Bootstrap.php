@@ -57,6 +57,7 @@ class Bootstrap
         register_shutdown_function(array(static::class, 'exceptionHandler'));
         spl_autoload_register(array(static::class, 'autoloadRegister'));
 
+        DB::initialize();
 //        DB::migrateAllSql();
 //        $b = new Root('');
 //        $a = new Text("hi\nBye");
