@@ -52,3 +52,12 @@ function dd(...$vars)
     $message->sendTo();
     exit();
 }
+
+function array_remove_keys($array,$keys)
+{
+    foreach($keys as $key)
+    {
+        unset($array[$key]);
+    }
+    return $array;
+}

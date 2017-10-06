@@ -25,3 +25,13 @@
 2017-10-04 23:06:47 -> SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WHERE (`id`=5 or`id`=6)' at line 1 in F:\xampp\htdocs\telegram-bot-framework\src\core\database\DB.php at line 213
 2017-10-04 23:08:09 -> SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WHERE (`id`=5 or`id`=6)' at line 1 in F:\xampp\htdocs\telegram-bot-framework\src\core\database\DB.php at line 212
 2017-10-04 23:17:21 -> Cannot use object of type Robot\Core\Database\DataRow as array in F:\xampp\htdocs\telegram-bot-framework\tester.php at line 25
+2017-10-06 11:12:25 -> SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '``,``keyboardposts__keyboard_id``,``keyboardposts__post_id``,``posts__id``,``pos' at line 1 in F:\xampp\htdocs\telegram-bot-framework\src\core\database\DB.php at line 211
+2017-10-06 11:15:02 -> SQLSTATE[42S22]: Column not found: 1054 Unknown column 'keyboardposts__id' in 'field list' in F:\xampp\htdocs\telegram-bot-framework\src\core\database\DB.php at line 211
+2017-10-06 11:45:54 -> SQLSTATE[23000]: Integrity constraint violation: 1052 Column 'id' in field list is ambiguous in F:\xampp\htdocs\telegram-bot-framework\src\core\database\DB.php at line 220
+2017-10-06 13:38:26 -> Undefined offset: 1 in F:\xampp\htdocs\telegram-bot-framework\src\core\baseclasses\BaseModel.php at line 218
+2017-10-06 14:00:15 -> Undefined offset: 2 in F:\xampp\htdocs\telegram-bot-framework\tester.php at line 9
+2017-10-06 14:38:25 -> Undefined variable: posts in F:\xampp\htdocs\telegram-bot-framework\tester.php at line 7
+2017-10-06 17:04:36 -> Undefined index: id in F:\xampp\htdocs\telegram-bot-framework\src\core\baseclasses\BaseModel.php at line 280
+2017-10-06 17:06:30 -> Undefined index: id in F:\xampp\htdocs\telegram-bot-framework\src\core\baseclasses\BaseModel.php at line 281
+2017-10-06 17:45:31 -> Access to undeclared static property: Robot\Models\Keyboard::$primary_key_name in F:\xampp\htdocs\telegram-bot-framework\src\core\baseclasses\BaseModel.php at line 164
+2017-10-06 17:54:07 -> SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry '1-a' for key 'PRIMARY' in F:\xampp\htdocs\telegram-bot-framework\src\core\database\DB.php at line 278

@@ -7,6 +7,7 @@ use PDO;
 use PDOException;
 use Robot\Core\Contracts\IModel;
 use Robot\Core\Database\DataRow;
+use Robot\Core\Database\DataSet;
 use Robot\Core\Database\DB;
 
 /**
@@ -17,10 +18,14 @@ use Robot\Core\Database\DB;
 class BaseModel implements IModel
 {
     private static $connection;
+    private $join_fields = [];
+    private $join_tables = [];
     protected static $table;
+    protected static $primary_key;
     protected static $where = '';
     protected static $glueWhere = ' and ';
     protected static $join = '';
+    protected static $join_columns = '';
     protected static $order = '';
     protected static $query;
 
@@ -117,8 +122,18 @@ class BaseModel implements IModel
 
     protected function hasMany($table,$primary_key,$foreign_key,$join='LEFT')
     {
-        $destination_table = self::sanitizeFields($table);
+        $db_name = env('database_name');
+        $join_columns = [];
+        $this->join_tables[] = $table;
+        DB::selectEach('information_schema.COLUMNS',function($row)use($table,&$join_columns){
 
+            $join_columns[] = $table . '.' . $row['COLUMN_NAME'] . ' AS ' . $table . '__' . $row['COLUMN_NAME'];
+
+        },['COLUMN_NAME'],"`TABLE_SCHEMA` = '$db_name' AND `TABLE_NAME`='$table'");
+
+        $this->join_fields = array_merge($this->join_fields,$join_columns);
+
+        $destination_table = DB::sanitizeFields($table);
         $primary_key = /*$source_table . '.' . */self::sanitizeFields($primary_key);
         $foreign_key = /*$destination_table . '.' .*/ self::sanitizeFields($foreign_key);
         static::$join .= " $join JOIN $destination_table ON $primary_key=$foreign_key";
@@ -146,7 +161,7 @@ class BaseModel implements IModel
         if(!is_array($ids))
             $ids = [$ids];
 
-        static::$where = self::generateWhereForArray('id',$ids);
+        static::$where = self::generateWhereForArray(static::$primary_key,$ids);
 
         return new static();
     }
@@ -186,7 +201,67 @@ class BaseModel implements IModel
 
     public function get($columns = ['*'])
     {
-        return DB::select(static::$table,$columns,static::$where,static::$join,static::$order);
+        if (count($columns) == 1 && $columns[0]=='*')
+        {
+            unset($columns[0]);
+            $columns = is_array(static::$primary_key)?static::$primary_key:[static::$primary_key];
+            $table = static::$table;
+            $db_name = env('database_name');
+            DB::selectEach('information_schema.COLUMNS',function($row)use($table,&$columns){
+                if(!in_array($row['COLUMN_NAME'],$columns))
+                    $columns[] = $table . '.' . $row['COLUMN_NAME'];
+
+            },['COLUMN_NAME'],"`TABLE_SCHEMA` = '$db_name' AND `TABLE_NAME`='$table'");
+
+//            $columns[0] = self::sanitizeFields(static::$table) . '.*';
+        }
+        else
+        {
+            if(is_array(static::$primary_key))
+            {
+                foreach (static::$primary_key as $key) {
+                    if(!in_array($key,$columns))
+                        $columns[]= static::$table . '.' . $key;
+                }
+            }
+            else
+            {
+                if(!in_array(static::$primary_key,$columns))
+                    $columns[]= static::$table . '.' . static::$primary_key;
+            }
+        }
+
+        $columns = array_merge($columns,$this->join_fields);
+
+        $ds = new DataSet();
+        $table = static::$table;
+
+        DB::selectEach(static::$table,function($row)use(&$ds , $table){
+            $dr = new DataRow($table,$row,self::bridge($row));
+
+            foreach($row as $field => $value)
+            {
+                $join_data  = explode('__',$field);
+
+                if(count($join_data)>1)
+                {
+                    $join_table = $join_data[0];
+                    $join_field = $join_data[1];
+
+                    $join_data_row = $dr->addRowGroup($join_table,$table);
+                    $join_data_row->$join_field = $value;
+
+                }
+                else
+                {
+                    $dr->$field = $value;
+                }
+            }
+            $ds->add($dr);
+
+        }, $columns,static::$where,static::$join,static::$order);
+
+        return $ds;
     }
 
     public function getTableName()
@@ -197,7 +272,44 @@ class BaseModel implements IModel
     public static function create($attributes)
     {
         $id = DB::insert(static::$table,$attributes);
-        return new DataRow(new static(),$id);
+        if($id!=0)
+            return new DataRow(static::$table,$attributes,[static::$primary_key=>$id]);
+
+        return new DataRow(static::$table,$attributes,self::bridge($attributes));
+
+    }
+
+    private static function bridge($attr)
+    {
+        if(empty(static::$primary_key))
+            return false;
+
+        if(is_array(static::$primary_key))
+        {
+
+            return self::getPairsByKeys($attr,static::$primary_key);
+/*            $where = '';
+            foreach (static::$primary_key as $key_name)
+                $where .= $key_name . '=' . $attr[$key_name] . ' AND ';
+
+            $where = rtrim($where,' AND ');
+            $u = DB::select(static::$table, ['*'] ,$where);
+            if(count($u)!=1)
+                return false;
+
+            $t=[];
+            foreach (static::$primary_key as $key_name)
+                $t[$key_name] = $u[0][$key_name];
+
+            return $t;*/
+        }
+
+        return [static::$primary_key => $attr[static::$primary_key]];
+        /*$u = DB::select(static::$table, [static::$primary_key],static::$primary_key . '=' .$attr[static::$primary_key]);
+        if(count($u)!=1)
+            return false;
+
+        return [static::$primary_key => $u[0][static::$primary_key]];*/
     }
 
     /**
@@ -207,11 +319,21 @@ class BaseModel implements IModel
      */
     public static function update($attributes)
     {
-        $updated_ids = DB::update(static::$table,$attributes,static::$where);;
+        $updated_rows = DB::update(static::$table,$attributes,static::$where);
         $result = [];
-        foreach ($updated_ids as $id)
+        foreach ($updated_rows as $row)
         {
-            $result[] = new DataRow(new static(),$id);
+            $result[] = new DataRow(static::$table,$row,self::bridge($row));
+        }
+        return $result;
+    }
+
+    private static function getPairsByKeys($array_pairs,$array_keys)
+    {
+        $result = [];
+        foreach ($array_keys as $array_key) {
+            if(isset($array_pairs[$array_key]))
+                $result[$array_key] = $array_pairs[$array_key];
         }
         return $result;
     }

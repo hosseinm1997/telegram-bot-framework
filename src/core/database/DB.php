@@ -23,7 +23,7 @@ class DB
 
     }
 
-    private static function sanitizeFields($input)
+    public static function sanitizeFields($input)
     {
         $result = '';
         if(!is_array($input))
@@ -42,6 +42,15 @@ class DB
                 $result .= static::sanitizeFields($parts[0]) . '.' . static::sanitizeFields($parts[1]);
                 continue;
             }
+
+            if($pos = stripos($item,' AS '))
+            {
+                $item = str_replace(substr($item,$pos,4),' AS ',$item);
+                $parts = explode(' AS ',$item);
+                $result .= static::sanitizeFields($parts[0]) . ' AS ' . static::sanitizeFields($parts[1]);
+                continue;
+            }
+
             $result .= "`$item`";
         }
         return $result;
@@ -110,13 +119,16 @@ class DB
         return self::migrateSql( __DIR__ . "\\builtinsqldumps\\") ? 'built-in tables were migrated successfully' : 'built-in migrating failed';
     }
 
-    public static function getPrimaryKey($table)
+    public static function getPrimaryKeys($table)
     {
-        return static::selectFirst(
-            'information_schema.COLUMNS',
+        $keys = [];
+        static::selectEach('information_schema.COLUMNS',function($row) use (&$keys){
+            $keys[] = $row['COLUMN_NAME'];
+        },
             ['COLUMN_NAME'],
             sprintf("(`TABLE_SCHEMA` = '%s') AND (`TABLE_NAME` = '%s') AND (`COLUMN_KEY` = 'PRI')", env('DATABASE_NAME'), $table)
-        )['COLUMN_NAME'];
+        );
+        return $keys;
     }
     /**
      * @return null|\PDO
@@ -205,6 +217,7 @@ class DB
      */
     public static function selectRaw($query, $return_type = 'array')
     {
+//        dd($query);
         try
         {
             $stmt = static::$connection->prepare($query);
@@ -310,12 +323,7 @@ class DB
 //            dd($update_clause);
             $statement->execute();
 
-            $affected_ids = [];
-            DB::selectEach($table,function($row) use (&$affected_ids,$table){
-                $affected_ids[] = $row[self::getPrimaryKey($table)];
-            } ,['id'],ltrim($where_clause,' WHERE '));
-
-            return $affected_ids;
+            return DB::select($table,['*'],ltrim($where_clause,' WHERE '));;
         }
         catch(PDOException $pdo_exception)
         {

@@ -8,11 +8,18 @@ use Robot\Core\Contracts\IModel;
 class DataSet
 {
     private $rows=[];
-    function __construct(IModel $model,$ids)
+    function __construct()
     {
-        foreach ($ids as $id)
-        {
 
-        }
+    }
+
+    public function add(DataRow $dataRow)
+    {
+        $this->rows [] = $dataRow;
+    }
+
+    function getAll()
+    {
+        return $this->rows;
     }
 }

@@ -8,6 +8,7 @@ use Robot\Core\BaseClasses\BaseModel;
 class Keyboard extends BaseModel
 {
     protected static $table = 'keyboards';
+    protected static $primary_key = 'id';
 
     public function posts()
     {
